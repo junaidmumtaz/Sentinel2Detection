@@ -1,0 +1,76 @@
+// Example 01- Aggregate Security Alerts by Severity from different workspaces
+
+union workspace("workspace1").SecurityAlert,
+      workspace("workspace2").SecurityAlert,
+      workspace("workspace3").SecurityAlert
+| summarize TotalAlerts = count() by Severity
+
+// Example 02- Retrieve Top 10 IP Addresses with Highest Traffic Across Workspaces
+
+union workspace("workspace1").SecurityEvent,
+      workspace("workspace2").SecurityEvent,
+      workspace("workspace3").SecurityEvent
+| where EventID == 4624
+| summarize TotalEvents = count() by RemoteIP
+| top 10 by TotalEvents desc
+
+// Example 03-Check for Malicious File Downloads Across Workspaces
+
+union workspace("workspace1").FileDownloadEvents,
+      workspace("workspace2").FileDownloadEvents
+      workspace("workspace3").FileDownloadEvents
+| where ActionType == "Downloaded"
+| where FileName endswith ".exe" or
+        FileName endswith ".dll"
+| project TimeGenerated, InitiatingUser, FileName, RemoteIP
+
+// Example 04-Detect password spray attack across various workspaces
+
+let timeframe = 7d;
+let threshold = 3;
+union
+    SigninLogs
+    workspace("Region-A Workspace").SigninLogs,
+    workspace("Region-B Workspace").SigninLogs,
+    workspace("Region-C Workspace").SigninLogs,
+    workspace("Region-D Workspace").SigninLogs
+| where TimeGenerated >= ago(timeframe)
+| where ResultType == "50057"
+| where ResultDescription =~ "User account is disabled. The account has been disabled by an administrator."
+| summarize
+    StartTime = min(TimeGenerated),
+    EndTime = max(TimeGenerated),
+    count(),
+    applicationSet =
+    make_set(AppDisplayName),
+    ApplicationCount = dcount(AppDisplayName)
+    by UserPrincipalName, IPAddress
+| where ApplicationCount >= threshold
+
+
+// Example 05-Analysis of User Logon Failures across cross-workspace
+
+  union
+    workspace("Region-A Workspace").SecurityEvent,
+    workspace("Region-B Workspace").SecurityEvent,
+    workspace("Region-C Workspace").SecurityEvent,
+    workspace("Region-D Workspace").SecurityEvent
+  | where AccountType == 'User' and EventID == 4625
+  | extend Reason = case(
+  SubStatus == '0xc000005e', 'No logon servers available to service the logon request',
+  SubStatus == '0xc0000062', 'Account name is not properly formatted',
+  SubStatus == '0xc0000064', 'Account name does not exist',
+  SubStatus == '0xc000006a', 'Incorrect password',    SubStatus == '0xc000006d', 'Bad user name or password',
+  SubStatus == '0xc000006f', 'User logon blocked by account restriction',
+  SubStatus == '0xc000006f', 'User logon outside of restricted logon hours',
+  SubStatus == '0xc0000070', 'User logon blocked by workstation restriction',
+  SubStatus == '0xc0000071', 'Password has expired',
+  SubStatus == '0xc0000072', 'Account is disabled',
+  SubStatus == '0xc0000133', 'Clocks between DC and other computer too far out of sync',
+  SubStatus == '0xc000015b', 'The user has not been granted the requested logon right at this machine',
+  SubStatus == '0xc0000193', 'Account has expirated',
+  SubStatus == '0xc0000224', 'User is required to change password at next logon',
+  SubStatus == '0xc0000234', 'Account is currently locked out',
+  strcat('Unknown reason substatus: ', SubStatus))
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Reason,Account
+  | extend timestamp = StartTimeUtc
