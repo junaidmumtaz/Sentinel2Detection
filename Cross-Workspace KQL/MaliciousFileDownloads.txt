@@ -1,0 +1,9 @@
+// Example - Check for Malicious File Downloads Across Workspaces
+
+union workspace("workspace1").FileDownloadEvents,
+      workspace("workspace2").FileDownloadEvents
+      workspace("workspace3").FileDownloadEvents
+| where ActionType == "Downloaded"
+| where FileName endswith ".exe" or
+        FileName endswith ".dll"
+| project TimeGenerated, InitiatingUser, FileName, RemoteIP

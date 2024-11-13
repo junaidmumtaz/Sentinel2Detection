@@ -1,0 +1,8 @@
+// Example - Retrieve Top 10 IP Addresses with Highest Traffic Across Workspaces
+
+union workspace("workspace1").SecurityEvent,
+      workspace("workspace2").SecurityEvent,
+      workspace("workspace3").SecurityEvent
+| where EventID == 4624
+| summarize TotalEvents = count() by RemoteIP
+| top 10 by TotalEvents desc
