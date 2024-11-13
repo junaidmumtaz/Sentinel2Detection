@@ -1,0 +1,6 @@
+// Example - Aggregate Security Alerts by Severity from different workspaces
+
+union workspace("workspace1").SecurityAlert,
+      workspace("workspace2").SecurityAlert,
+      workspace("workspace3").SecurityAlert
+| summarize TotalAlerts = count() by Severity
